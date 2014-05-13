@@ -9,13 +9,24 @@ import (
 	"os/signal"
 )
 
-type HerokuCmd struct {
+type herokuCmd struct {
 	subcommand string
 	app        string
 }
 
-func (h *HerokuCmd) String() string {
+func (h *herokuCmd) String() string {
 	return "heroku " + h.subcommand + " -a " + h.app
+}
+
+func HerokuCmd(subcommand string, app string) *exec.Cmd {
+  command := herokuCmd{subcommand: subcommand, app: app}
+  cmd := exec.Command("/bin/bash", "-c", command.String())
+
+  // Rewire the new processes' iostreams to ours
+  cmd.Stdout = os.Stdout
+  cmd.Stdin = os.Stdin
+  cmd.Stderr = os.Stderr
+  return cmd
 }
 
 func main() {
@@ -27,20 +38,22 @@ func main() {
 	ps := app_name + " > "
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Print(ps)
+
+  // REPL
 	for scanner.Scan() {
-		command := HerokuCmd{subcommand: scanner.Text(), app: app_name}
-		switch command.subcommand {
+    input := scanner.Text()
+
+    // Parse out special commands
+		switch input {
 		case ":exit":
 			os.Exit(0)
-		case "\n":
+		case "":
+      fmt.Print(ps)
 			continue
 		case "console":
-			command.subcommand = "run console"
+			input = "run console"
 		}
-		cmd := exec.Command("/bin/bash", "-c", command.String())
-		cmd.Stdout = os.Stdout
-		cmd.Stdin = os.Stdin
-		cmd.Stderr = os.Stderr
+    cmd := HerokuCmd(input, app_name)
 
     //Channel Setup for process execution
 		done := make(chan error)
